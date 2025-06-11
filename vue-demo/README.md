@@ -1,29 +1,20 @@
 # vue-demo
 
-This template should help get you started developing with Vue 3 in Vite.
+## 环境准备   
+1.下载并安装Node.js    下载地址：https://nodejs.org/zh-cn      
+2.在cmd界面输入 Node -v  和   npm -v ,正常应该显示出版本   
+3.在vue-demo文件夹进入cmd界面，依次输入
+```
+npm install -g pnpm   
 
-## Recommended IDE Setup
+pnpm install   
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
+pnpm add element-plus vue-router axios
 ```
 
-### Compile and Hot-Reload for Development
-
-```sh
+##  运行
+在vue-demo文件夹进入cmd界面，输入
+```
 npm run dev
 ```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
-```
+然后复制弹出的路径到浏览器打开即可。
