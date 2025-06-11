@@ -3,7 +3,7 @@ import { ref, onMounted, nextTick } from 'vue'
 import ControlBar from './ControlBar.vue'
 
 const props = defineProps({
-  showHelp: Boolean // 来自父组件
+  showHelp: Boolean
 })
 const emit = defineEmits(['update:showHelp'])
 
@@ -15,7 +15,9 @@ const videoElement = ref(null)
 const isPlaying = ref(false)
 const isMuted = ref(false)
 const volume = ref(50)
-let previousVolume = 50 // 保存静音前音量
+const brightness = ref(100)
+const playbackRate = ref(1.0)
+let previousVolume = 50
 
 onMounted(() => {
   videoList.value = ['sample1.mp4', 'sample2.mp4']
@@ -30,6 +32,7 @@ function selectVideo(index) {
     if (videoElement.value) {
       videoElement.value.volume = volume.value / 100
       videoElement.value.muted = isMuted.value
+      videoElement.value.playbackRate = playbackRate.value
       videoElement.value.play()
       isPlaying.value = true
     }
@@ -42,6 +45,18 @@ function prevVideo() {
 
 function nextVideo() {
   if (currentIndex.value < videoList.value.length - 1) selectVideo(currentIndex.value + 1)
+}
+
+function seekBackward(seconds) {
+  if (videoElement.value) {
+    videoElement.value.currentTime = Math.max(0, videoElement.value.currentTime - seconds)
+  }
+}
+
+function seekForward(seconds) {
+  if (videoElement.value) {
+    videoElement.value.currentTime = Math.min(videoElement.value.duration, videoElement.value.currentTime + seconds)
+  }
 }
 
 function togglePlay() {
@@ -81,6 +96,17 @@ function changeVolume(val) {
   }
 }
 
+function changeBrightness(val) {
+  brightness.value = val
+}
+
+function changeRate(val) {
+  playbackRate.value = val
+  if (videoElement.value) {
+    videoElement.value.playbackRate = val
+  }
+}
+
 function enterFullscreen() {
   videoElement.value?.requestFullscreen?.()
 }
@@ -88,7 +114,6 @@ function enterFullscreen() {
 
 <template>
   <div class="video-player">
-    <!-- 视频列表 -->
     <div class="video-list" :class="{ shifted: showHelp }">
       <h3>视频目录</h3>
       <ul>
@@ -103,20 +128,20 @@ function enterFullscreen() {
       </ul>
     </div>
 
-    <!-- 视频区域 -->
     <div class="video-area">
       <video
         ref="videoElement"
         :src="currentVideoSrc"
         controls
-        style="width: 100%; max-height: 500px"
+        :style="{ width: '100%', maxHeight: '600px', filter: `brightness(${brightness}%)` }"
       ></video>
 
-      <!-- 控制条 -->
       <ControlBar
         :isPlaying="isPlaying"
         :isMuted="isMuted"
         :volume="volume"
+        :brightness="brightness"
+        :playbackRate="playbackRate"
         :disablePrev="currentIndex === 0"
         :disableNext="currentIndex === videoList.length - 1"
         :showGestureHelp="showHelp"
@@ -126,7 +151,11 @@ function enterFullscreen() {
         @togglePlay="togglePlay"
         @mute="toggleMute"
         @volumeChange="changeVolume"
+        @brightnessChange="changeBrightness"
+        @rateChange="changeRate"
         @fullscreen="enterFullscreen"
+        @seekForward="seekForward"
+        @seekBackward="seekBackward"
       />
     </div>
   </div>
@@ -138,14 +167,13 @@ function enterFullscreen() {
   flex-direction: row;
 }
 
-/* 视频列表样式 */
 .video-list {
   position: absolute;
   top: 50px;
   left: -50px;
   width: 180px;
   height: 700px;
-  background-color: #eaf4fc; /* 浅蓝色背景 */
+  background-color: #eaf4fc;
   padding: 20px 15px;
   border-right: 1px solid #d0e3f1;
   border-radius: 10px 0 0 10px;
@@ -155,7 +183,6 @@ function enterFullscreen() {
   z-index: 10;
 }
 
-/* 被推移时的隐藏状态 */
 .video-list.shifted {
   transform: translateX(-200px);
 }
