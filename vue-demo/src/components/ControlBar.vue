@@ -1,13 +1,10 @@
 <template>
   <div class="control-bar-wrapper">
-    <!-- 手势说明按钮（右上角） -->
     <el-button class="gesture-help-btn" @click="$emit('update:showGestureHelp', !showGestureHelp)">
       {{ showGestureHelp ? '隐藏手势说明' : '显示手势说明' }}
     </el-button>
 
-    <!-- 控制按钮区域 -->
     <div class="control-bar">
-      <!-- 第一行按钮 -->
       <div class="button-row">
         <el-button :disabled="disablePrev" @click="$emit('prev')">上一个</el-button>
         <el-button @click="$emit('seekBackward', 5)">快退5秒</el-button>
@@ -16,7 +13,6 @@
         <el-button :disabled="disableNext" @click="$emit('next')">下一个</el-button>
       </div>
 
-      <!-- 第二行按钮 -->
       <div class="button-row">
         <el-button
           :style="{
@@ -25,53 +21,52 @@
           }"
           @click="$emit('mute')"
         >
-          <i
-            :class="isMuted ? 'el-icon-volume-off' : 'el-icon-volume-up'"
-            style="margin-right: 5px"
-          ></i>
+          <i :class="isMuted ? 'el-icon-volume-off' : 'el-icon-volume-up'" style="margin-right: 5px"></i>
           {{ isMuted ? '解除静音' : '静音' }}
         </el-button>
 
-        <!-- 音量调节 -->
         <div class="volume-control">
-          <div class="volume-label">音量调节</div>
+          <div class="volume-label">音量</div>
           <el-slider
-            class="volume-slider"
             :min="0"
             :max="100"
-            :step="1"
             :model-value="volume"
             @update:modelValue="$emit('volumeChange', $event)"
             style="width: 120px"
           />
         </div>
 
-        <!-- 亮度调节 -->
-        <div class="brightness-control">
-          <div class="volume-label">亮度调节</div>
+        <div class="volume-control">
+          <div class="volume-label">亮度</div>
           <el-slider
-            class="brightness-slider"
             :min="50"
-            :max="150"
-            :step="10"
+            :max="200"
             :model-value="brightness"
             @update:modelValue="$emit('brightnessChange', $event)"
             style="width: 120px"
           />
         </div>
 
-        <!-- 倍速选择 -->
-        <div class="speed-control">
-          <div class="volume-label">倍速播放</div>
+        <div class="volume-control">
+          <div class="volume-label">倍速</div>
           <el-select
             :model-value="playbackRate"
             @update:modelValue="$emit('rateChange', $event)"
-            placeholder="倍速"
-            style="width: 100px"
+            style="width: 80px"
           >
-            <el-option v-for="rate in rateOptions" :key="rate" :label="`${rate}x`" :value="rate" />
+            <el-option label="0.5x" :value="0.5" />
+            <el-option label="1x" :value="1" />
+            <el-option label="1.5x" :value="1.5" />
+            <el-option label="2x" :value="2" />
           </el-select>
         </div>
+
+        <!-- 播放模式切换按钮 -->
+        <el-button @click="$emit('modeToggle')">
+          <template v-if="playMode === 'single'">🔂 循环 </template>
+          <template v-else-if="playMode === 'loop'">🔁 列表 </template>
+          <template v-else>🔀 随机 </template>
+        </el-button>
 
         <el-button @click="$emit('fullscreen')">全屏</el-button>
       </div>
@@ -86,12 +81,11 @@ const props = defineProps({
   volume: Number,
   brightness: Number,
   playbackRate: Number,
+  playMode: String,
   disablePrev: Boolean,
   disableNext: Boolean,
   showGestureHelp: Boolean,
 })
-
-const rateOptions = [0.5, 1, 1.5, 2]
 </script>
 
 <style scoped>
@@ -122,9 +116,7 @@ const rateOptions = [0.5, 1, 1.5, 2]
   z-index: 999;
 }
 
-.volume-control,
-.brightness-control,
-.speed-control {
+.volume-control {
   display: flex;
   flex-direction: row;
   align-items: center;

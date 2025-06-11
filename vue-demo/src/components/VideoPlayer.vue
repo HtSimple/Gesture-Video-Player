@@ -17,11 +17,18 @@ const isMuted = ref(false)
 const volume = ref(50)
 const brightness = ref(100)
 const playbackRate = ref(1.0)
+const playMode = ref('loop') // 'single', 'loop', 'shuffle'
 let previousVolume = 50
 
 onMounted(() => {
   videoList.value = ['sample1.mp4', 'sample2.mp4']
   if (videoList.value.length) selectVideo(0)
+
+  nextTick(() => {
+    if (videoElement.value) {
+      videoElement.value.addEventListener('ended', handleEnded)
+    }
+  })
 })
 
 function selectVideo(index) {
@@ -110,6 +117,33 @@ function changeRate(val) {
 function enterFullscreen() {
   videoElement.value?.requestFullscreen?.()
 }
+
+function togglePlayMode() {
+  const modes = ['loop', 'single', 'shuffle']
+  const current = modes.indexOf(playMode.value)
+  playMode.value = modes[(current + 1) % modes.length]
+}
+
+function handleEnded() {
+  if (!videoElement.value) return
+
+  if (playMode.value === 'single') {
+    videoElement.value.currentTime = 0
+    videoElement.value.play()
+  } else if (playMode.value === 'loop') {
+    if (currentIndex.value < videoList.value.length - 1) {
+      selectVideo(currentIndex.value + 1)
+    } else {
+      selectVideo(0)
+    }
+  } else if (playMode.value === 'shuffle') {
+    let next
+    do {
+      next = Math.floor(Math.random() * videoList.value.length)
+    } while (next === currentIndex.value && videoList.value.length > 1)
+    selectVideo(next)
+  }
+}
 </script>
 
 <template>
@@ -145,6 +179,7 @@ function enterFullscreen() {
         :disablePrev="currentIndex === 0"
         :disableNext="currentIndex === videoList.length - 1"
         :showGestureHelp="showHelp"
+        :playMode="playMode"
         @update:showGestureHelp="emit('update:showHelp', $event)"
         @prev="prevVideo"
         @next="nextVideo"
@@ -156,6 +191,7 @@ function enterFullscreen() {
         @fullscreen="enterFullscreen"
         @seekForward="seekForward"
         @seekBackward="seekBackward"
+        @modeToggle="togglePlayMode"
       />
     </div>
   </div>
