@@ -1,6 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
-import axios from 'axios'
+import { ref, onMounted, nextTick } from 'vue'
 import ControlBar from './ControlBar.vue'
 
 const props = defineProps({
@@ -16,6 +15,7 @@ const videoElement = ref(null)
 const isPlaying = ref(false)
 const isMuted = ref(false)
 const volume = ref(50)
+let previousVolume = 50 // 保存静音前音量
 
 onMounted(() => {
   videoList.value = ['sample1.mp4', 'sample2.mp4']
@@ -56,19 +56,34 @@ function togglePlay() {
 }
 
 function toggleMute() {
+  if (!isMuted.value) {
+    previousVolume = volume.value
+    volume.value = 0
+  } else {
+    volume.value = previousVolume
+  }
+
   isMuted.value = !isMuted.value
-  if (videoElement.value) videoElement.value.muted = isMuted.value
+
+  if (videoElement.value) {
+    videoElement.value.muted = isMuted.value
+    videoElement.value.volume = volume.value / 100
+  }
 }
 
 function changeVolume(val) {
   volume.value = val
-  if (videoElement.value) videoElement.value.volume = val / 100
+  isMuted.value = val === 0
+
+  if (videoElement.value) {
+    videoElement.value.volume = val / 100
+    videoElement.value.muted = isMuted.value
+  }
 }
 
 function enterFullscreen() {
   videoElement.value?.requestFullscreen?.()
 }
-
 </script>
 
 <template>
@@ -97,7 +112,7 @@ function enterFullscreen() {
         style="width: 100%; max-height: 500px"
       ></video>
 
-      <!-- 控制条，带有 showHelp 控制 -->
+      <!-- 控制条 -->
       <ControlBar
         :isPlaying="isPlaying"
         :isMuted="isMuted"
@@ -127,30 +142,56 @@ function enterFullscreen() {
 .video-list {
   position: absolute;
   top: 50px;
-  left: -20px;
-  width: 123px;
+  left: -50px;
+  width: 180px;
   height: 700px;
-  background-color: #f5f5f5;
-  padding: 15px;
-  border-right: 1px solid #ddd;
+  background-color: #eaf4fc; /* 浅蓝色背景 */
+  padding: 20px 15px;
+  border-right: 1px solid #d0e3f1;
+  border-radius: 10px 0 0 10px;
+  box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
   transition: transform 0.3s ease;
+  z-index: 10;
 }
+
+/* 被推移时的隐藏状态 */
 .video-list.shifted {
-  transform: translateX(-200px); /* 向左推移防止遮挡 */
+  transform: translateX(-200px);
+}
+
+.video-list h3 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #409eff;
+  border-bottom: 1px solid #d0e3f1;
+  padding-bottom: 6px;
 }
 
 .video-list ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
+
 .video-list li {
-  padding: 6px 0;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  color: #333;
 }
+
+.video-list li:hover {
+  background-color: #d0eaff;
+  color: #000;
+}
+
 .video-list li.active {
+  background-color: #409eff;
+  color: #fff;
   font-weight: bold;
-  color: #409eff;
 }
 
 .video-area {
