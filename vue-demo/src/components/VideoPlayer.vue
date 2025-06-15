@@ -1,55 +1,63 @@
 <script setup>
-// 修复：移除重复的 onMounted 导入
+// 导入Vue组合式API所需的响应式工具和生命周期钩子
 import { ref, onMounted, nextTick, onBeforeUnmount, reactive } from 'vue'
-import ControlBar from './ControlBar.vue'
-import axios from 'axios'
+import ControlBar from './ControlBar.vue' // 导入自定义控制栏组件
+import axios from 'axios' // 导入HTTP请求库
 
+// 定义组件属性（父组件可通过showHelp控制是否显示帮助信息）
 const props = defineProps({
   showHelp: Boolean
 })
+// 定义组件事件（用于通知父组件更新showHelp状态）
 const emit = defineEmits(['update:showHelp'])
 
-const videoList = ref([])
-const currentIndex = ref(0)
-const currentVideoSrc = ref('')
-const videoElement = ref(null)
+// ----------------------- 视频播放核心状态 -----------------------
+const videoList = ref([]) // 存储视频文件列表的响应式数据
+const currentIndex = ref(0) // 当前播放视频的索引
+const currentVideoSrc = ref('') // 当前视频的源地址
+const videoElement = ref(null) // 视频DOM元素的引用
 
-const isPlaying = ref(false)
-const isMuted = ref(false)
-const volume = ref(50)
-const brightness = ref(100)
-const playbackRate = ref(1.0)
-const playMode = ref('loop') // 'single', 'loop', 'shuffle'
-let previousVolume = 50
+// ----------------------- 播放控制状态 -----------------------
+const isPlaying = ref(false) // 视频是否正在播放
+const isMuted = ref(false) // 是否静音
+const volume = ref(50) // 音量大小（0-100）
+const brightness = ref(100) // 亮度调节（0-100）
+const playbackRate = ref(1.0) // 播放速率
+const playMode = ref('loop') // 播放模式（单曲循环/列表循环/随机播放）
+let previousVolume = 50 // 静音前的音量备份
 
-// 摄像头相关
-const cameraVideo = ref(null)
-const isCameraOn = ref(false)
-let cameraStream = null
-const gestureCanvas = document.createElement('canvas')
+// ----------------------- 摄像头与手势识别状态 -----------------------
+const cameraVideo = ref(null) // 摄像头视频DOM元素的引用
+const isCameraOn = ref(false) // 摄像头是否开启
+let cameraStream = null // 摄像头媒体流对象
+const gestureCanvas = document.createElement('canvas') // 手势识别用的画布元素
 
-let gestureInterval = null
+let gestureInterval = null // 手势识别定时器
 
-// 全屏状态管理
-const isFullscreen = ref(false)
+// ----------------------- 全屏状态管理 -----------------------
+const isFullscreen = ref(false) // 是否处于全屏模式
 
-// 新增：手势指令防重复执行控制
+// ----------------------- 手势指令防抖控制 -----------------------
 const gestureControl = reactive({
-  lastCommand: '',
-  lastTime: 0,
-  debounceTime: 3000 // 3秒防抖时间
+  lastCommand: '', // 上一次识别的手势指令
+  lastTime: 0, // 上一次指令的时间戳
+  debounceTime: 3000 // 防抖时间（3秒内相同指令不重复执行）
 })
 
+// ----------------------- 生命周期钩子 -----------------------
+// 组件挂载后执行初始化操作
 onMounted(() => {
-  // 初始视频列表
+  // 初始化视频列表
   videoList.value = []
+  // 若列表有视频，自动选择第一个播放
   if (videoList.value.length) selectVideo(0)
 
   nextTick(() => {
     if (videoElement.value) {
+      // 监听视频播放结束事件
       videoElement.value.addEventListener('ended', handleEnded)
       
-      // 监听全屏状态变化
+      // 监听全屏状态变化（兼容不同浏览器的全屏API）
       document.addEventListener('fullscreenchange', handleFullscreenChange)
       document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
       document.addEventListener('mozfullscreenchange', handleFullscreenChange)
@@ -58,9 +66,10 @@ onMounted(() => {
   })
 })
 
+// 组件卸载前执行资源释放操作
 onBeforeUnmount(() => {
-  stopGestureRecognition()
-  stopCamera()
+  stopGestureRecognition() // 停止手势识别
+  stopCamera() // 停止摄像头
   
   // 移除全屏状态监听
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
@@ -68,7 +77,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
   document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
   
-  // 释放所有创建的Object URL
+  // 释放所有视频的Object URL资源（避免内存泄漏）
   videoList.value.forEach(item => {
     if (item?.url) {
       URL.revokeObjectURL(item.url)
@@ -76,29 +85,30 @@ onBeforeUnmount(() => {
   })
 })
 
-// 标记为async函数
+// ----------------------- 视频播放控制函数 -----------------------
+// 选择并播放指定索引的视频（异步函数，处理视频加载和播放）
 async function selectVideo(index) {
   currentIndex.value = index
   const videoItem = videoList.value[index]
   
-  // 如果还没有为该视频创建Object URL，则创建
+  // 首次加载时为视频文件创建Object URL
   if (!videoItem.url) {
     videoItem.url = URL.createObjectURL(videoItem.file)
   }
   
   currentVideoSrc.value = videoItem.url
   
-  // 等待视频元素加载新的源文件
+  // 等待DOM更新后设置视频源
   await nextTick()
   
   if (videoElement.value) {
     try {
-      // 设置视频属性
+      // 设置视频基础属性（音量、静音状态、播放速率）
       videoElement.value.volume = volume.value / 100
       videoElement.value.muted = isMuted.value
       videoElement.value.playbackRate = playbackRate.value
       
-      // 尝试播放视频
+      // 尝试播放视频（处理浏览器自动播放限制）
       await videoElement.value.play()
       isPlaying.value = true
     } catch (error) {
@@ -108,26 +118,31 @@ async function selectVideo(index) {
   }
 }
 
+// 播放上一个视频（索引减1，若当前为第一个则不执行）
 function prevVideo() {
   if (currentIndex.value > 0) selectVideo(currentIndex.value - 1)
 }
 
+// 播放下一个视频（索引加1，若当前为最后一个则不执行）
 function nextVideo() {
   if (currentIndex.value < videoList.value.length - 1) selectVideo(currentIndex.value + 1)
 }
 
+// 视频时间回退（秒数为负则向前跳转）
 function seekBackward(seconds) {
   if (videoElement.value) {
     videoElement.value.currentTime = Math.max(0, videoElement.value.currentTime - seconds)
   }
 }
 
+// 视频时间前进（不超过视频总时长）
 function seekForward(seconds) {
   if (videoElement.value) {
     videoElement.value.currentTime = Math.min(videoElement.value.duration, videoElement.value.currentTime + seconds)
   }
 }
 
+// 切换视频播放/暂停状态
 function togglePlay() {
   if (!videoElement.value) return
   if (videoElement.value.paused) {
@@ -139,6 +154,7 @@ function togglePlay() {
   }
 }
 
+// 切换静音状态（记录静音前音量，便于恢复）
 function toggleMute() {
   if (!isMuted.value) {
     previousVolume = volume.value
@@ -155,6 +171,7 @@ function toggleMute() {
   }
 }
 
+// 调整视频音量（同步更新静音状态）
 function changeVolume(val) {
   volume.value = val
   isMuted.value = val === 0
@@ -165,10 +182,12 @@ function changeVolume(val) {
   }
 }
 
+// 调整视频亮度（通过CSS滤镜实现）
 function changeBrightness(val) {
   brightness.value = val
 }
 
+// 调整视频播放速率
 function changeRate(val) {
   playbackRate.value = val
   if (videoElement.value) {
@@ -176,15 +195,15 @@ function changeRate(val) {
   }
 }
 
+// 切换全屏模式（兼容不同浏览器的全屏API）
 function toggleFullscreen() {
   if (!videoElement.value) return
   
-  // 处理浏览器兼容性
   if (!isFullscreen.value) {
     // 进入全屏
     if (videoElement.value.requestFullscreen) {
       videoElement.value.requestFullscreen()
-    } else if (videoElement.value.webkitRequestFullscreen) { // Chrome, Safari, Edge
+    } else if (videoElement.value.webkitRequestFullscreen) { // Chrome/Safari/Edge
       videoElement.value.webkitRequestFullscreen()
     } else if (videoElement.value.mozRequestFullScreen) { // Firefox
       videoElement.value.mozRequestFullScreen()
@@ -209,8 +228,9 @@ function toggleFullscreen() {
   }
 }
 
-// 处理全屏状态变化
+// 监听全屏状态变化并更新组件状态
 function handleFullscreenChange() {
+  // 检测当前是否处于全屏状态（兼容不同浏览器）
   isFullscreen.value = !!(document.fullscreenElement || 
                           document.webkitFullscreenElement || 
                           document.mozFullScreenElement || 
@@ -218,25 +238,30 @@ function handleFullscreenChange() {
   console.log(`当前全屏状态: ${isFullscreen.value}`)
 }
 
+// 切换播放模式（循环/单曲/随机）
 function togglePlayMode() {
   const modes = ['loop', 'single', 'shuffle']
   const current = modes.indexOf(playMode.value)
   playMode.value = modes[(current + 1) % modes.length]
 }
 
+// 处理视频播放结束事件（根据不同模式执行相应操作）
 function handleEnded() {
   if (!videoElement.value) return
 
   if (playMode.value === 'single') {
+    // 单曲模式：重新从0秒开始播放
     videoElement.value.currentTime = 0
     videoElement.value.play()
   } else if (playMode.value === 'loop') {
+    // 列表循环：播放下一个视频（或回到第一个）
     if (currentIndex.value < videoList.value.length - 1) {
       selectVideo(currentIndex.value + 1)
     } else {
       selectVideo(0)
     }
   } else if (playMode.value === 'shuffle') {
+    // 随机播放：生成不重复当前视频的随机索引
     let next
     do {
       next = Math.floor(Math.random() * videoList.value.length)
@@ -245,15 +270,17 @@ function handleEnded() {
   }
 }
 
-// === 摄像头控制 ===
-
+// ----------------------- 摄像头控制函数 -----------------------
+// 启动摄像头（请求媒体权限并设置视频源）
 async function startCamera() {
   try {
+    // 请求摄像头访问权限
     cameraStream = await navigator.mediaDevices.getUserMedia({ video: true })
     if (cameraVideo.value) {
+      // 设置摄像头视频源为媒体流
       cameraVideo.value.srcObject = cameraStream
       isCameraOn.value = true
-      startGestureRecognition()
+      startGestureRecognition() // 启动手势识别
     }
   } catch (err) {
     alert('无法打开摄像头，请检查权限')
@@ -261,15 +288,18 @@ async function startCamera() {
   }
 }
 
+// 停止摄像头（释放媒体流资源）
 function stopCamera() {
   if (cameraStream) {
+    // 停止媒体流中的所有轨道
     cameraStream.getTracks().forEach(track => track.stop())
     cameraStream = null
   }
   isCameraOn.value = false
-  stopGestureRecognition()
+  stopGestureRecognition() // 停止手势识别
 }
 
+// 切换摄像头开关状态
 function toggleCamera() {
   if (isCameraOn.value) {
     stopCamera()
@@ -278,20 +308,24 @@ function toggleCamera() {
   }
 }
 
-// === 手势识别，基于摄像头画面 ===
-
+// ----------------------- 手势识别函数 -----------------------
+// 启动手势识别（定时捕获摄像头画面并发送识别请求）
 function startGestureRecognition() {
-  stopGestureRecognition()
+  stopGestureRecognition() // 先停止已有的识别定时器
   if (!isCameraOn.value) return
 
+  // 每1500ms捕获一次摄像头画面
   gestureInterval = setInterval(async () => {
     if (!cameraVideo.value || cameraVideo.value.readyState < 2) return
 
     const ctx = gestureCanvas.getContext('2d')
+    // 设置画布尺寸与摄像头画面一致
     gestureCanvas.width = cameraVideo.value.videoWidth
     gestureCanvas.height = cameraVideo.value.videoHeight
+    // 将摄像头画面绘制到画布上
     ctx.drawImage(cameraVideo.value, 0, 0, gestureCanvas.width, gestureCanvas.height)
 
+    // 将画布内容转换为图片Blob并发送到服务器识别
     gestureCanvas.toBlob(async (blob) => {
       if (!blob) return
       const formData = new FormData()
@@ -302,7 +336,7 @@ function startGestureRecognition() {
             'Content-Type': 'multipart/form-data'
           }
         })
-        handleGestureCommand(res.data.gesture)
+        handleGestureCommand(res.data.gesture) // 处理识别到的手势指令
       } catch (err) {
         console.error('识别失败:', err)
       }
@@ -310,25 +344,17 @@ function startGestureRecognition() {
   }, 1500)
 }
 
+// 停止手势识别（清除定时器）
 function stopGestureRecognition() {
   if (gestureInterval) clearInterval(gestureInterval)
 }
-/*
-stop  暂停/播放
-like 上一个 
-dislike 下一个
-mute 静音和取消静音
-ok  模式切换 
-palm 全屏与取消全屏
-one 手势栏弹出与收回
-*/
 
-//手势命令处理
+// 手势命令处理函数（包含防抖逻辑和指令映射）
 function handleGestureCommand(cmd) {
   const now = new Date().getTime();
   const { lastCommand, lastTime, debounceTime } = gestureControl;
   
-  // 检查是否是相同指令且在防抖时间内
+  // 防抖处理：相同指令在debounceTime内不重复执行
   if (cmd.gesture === lastCommand && now - lastTime < debounceTime) {
     console.log(`忽略重复指令: ${cmd.gesture} (${(now - lastTime)/1000}s内)`)
     return;
@@ -338,6 +364,7 @@ function handleGestureCommand(cmd) {
   gestureControl.lastCommand = cmd.gesture;
   gestureControl.lastTime = now;
   
+  // 根据不同手势执行对应的播放器操作
   switch (cmd.gesture) {
     case 'like':
       prevVideo();
@@ -361,10 +388,10 @@ function handleGestureCommand(cmd) {
       break;
     case 'palm':
       toggleFullscreen()
-      console.log('识别到指令: 全屏切换，当前状态',isFullscreen.value);
+      console.log('识别到指令: 全屏切换，当前状态', isFullscreen.value);
       break;
     case 'one':
-      emit('update:showHelp', !props.showHelp);
+      emit('update:showHelp', !props.showHelp); // 通知父组件切换帮助栏显示状态
       console.log('识别到指令: 显示/隐藏手势帮助');
       break;
     default:
@@ -372,14 +399,13 @@ function handleGestureCommand(cmd) {
   }
 }
 
-// ===== 新增函数 =====
-
-// 处理用户选择文件夹（文件）事件
+// ----------------------- 视频文件管理函数 -----------------------
+// 处理用户选择文件夹/文件事件（导入本地视频）
 async function handleFolderSelect(event) {
   const files = event.target.files
   if (!files.length) return
 
-  // 过滤出所有视频文件
+  // 过滤出视频文件（通过MIME类型或后缀名）
   const videoFiles = Array.from(files).filter(file => 
     file.type.startsWith('video/') || 
     /\.(mp4|webm|ogg|mov|mkv)$/i.test(file.name)
@@ -390,24 +416,24 @@ async function handleFolderSelect(event) {
     return
   }
 
-  // 创建视频元数据列表
+  // 创建视频元数据列表（保存文件名、文件对象等信息）
   videoList.value = videoFiles.map(file => ({
     name: file.name,
-    file: file,           // 保存File对象
-    url: null,            // 稍后会设置为Object URL
+    file: file,           // 保存原始File对象
+    url: null,            // 后续生成Object URL
     type: file.type
   }))
   
-  // 选择第一个视频
+  // 选择并播放第一个视频
   if (videoList.value.length > 0) {
     await selectVideo(0)
   }
 }
-
 </script>
 
 <template>
   <div class="video-player">
+    <!-- 视频列表侧边栏（通过showHelp控制显示/隐藏） -->
     <div class="video-list" :class="{ shifted: showHelp }">
       <h3 style="display: flex; align-items: center; justify-content: space-between;">
         视频目录
@@ -439,6 +465,7 @@ async function handleFolderSelect(event) {
       </ul>
     </div>
 
+    <!-- 视频播放主区域 -->
     <div class="video-area">
       <video
         ref="videoElement"
@@ -448,6 +475,7 @@ async function handleFolderSelect(event) {
         @error="console.error('视频加载错误')"
       ></video>
 
+      <!-- 控制栏组件（传递播放状态并监听用户操作） -->
       <ControlBar
         :isPlaying="isPlaying"
         :isMuted="isMuted"
@@ -473,7 +501,7 @@ async function handleFolderSelect(event) {
         @modeToggle="togglePlayMode"
       />
 
-      <!-- 新增摄像头控制 -->
+      <!-- 摄像头控制区域（显示/隐藏基于isCameraOn状态） -->
       <div style="margin-top: 20px;">
         <button @click="toggleCamera">
           {{ isCameraOn ? '关闭摄像头' : '开启摄像头' }}
@@ -516,7 +544,7 @@ async function handleFolderSelect(event) {
 }
 
 .video-list.shifted {
-  transform: translateX(-200px);
+  transform: translateX(-200px); /* 隐藏侧边栏的位移量 */
 }
 
 .video-list h3 {
