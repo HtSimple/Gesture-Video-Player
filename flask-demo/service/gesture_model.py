@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 # 加载模型（只加载一次）
-model = YOLO("models/gesture_model.pt")  # 替换为你的模型路径
+model = YOLO("models/YOLOv10x_gestures.pt")  # 替换为你的模型路径
 
 # 类别标签映射（根据你模型实际输出调整）
 gesture_labels = {

@@ -1,12 +1,12 @@
 @echo off
-REM 激活虚拟环境（确保路径正确）
+REM Activate virtual environment (ensure the path is correct)
 call myvenv\Scripts\activate
 
-REM 设置 Flask 环境变量（可选，方便调试）
+REM Set Flask environment variables (optional, for debugging)
 set FLASK_APP=app.py
 set FLASK_ENV=development
 
-REM 启动 Flask 应用
+REM Start Flask application
 python app.py
 
 pause

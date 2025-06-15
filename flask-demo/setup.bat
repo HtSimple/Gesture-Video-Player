@@ -1,19 +1,19 @@
 @echo off
-REM 创建虚拟环境
-echo [1/4] 正在创建虚拟环境 myvenv ...
+REM Create virtual environment
+echo [1/4] Creating virtual environment myvenv ...
 python -m venv myvenv
 
-REM 激活虚拟环境
-echo [2/4] 正在激活虚拟环境 ...
+REM Activate virtual environment
+echo [2/4] Activating virtual environment ...
 call myvenv\Scripts\activate
 
-REM 安装依赖
-echo [3/4] 正在安装依赖 ...
+REM Install dependencies
+echo [3/4] Installing dependencies ...
 pip install --upgrade pip
 pip install -r requirements.txt
 
-REM 启动 Flask 项目
-echo [4/4] 正在启动 Flask 项目 ...
+REM Start Flask project
+echo [4/4] Starting Flask project ...
 python app.py
 
 pause
