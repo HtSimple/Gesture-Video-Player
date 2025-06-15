@@ -1,5 +1,7 @@
+vue
 <script setup>
-import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
+// 修复：移除重复的 onMounted 导入
+import { ref, onMounted, nextTick, onBeforeUnmount, reactive } from 'vue'
 import ControlBar from './ControlBar.vue'
 import axios from 'axios'
 
@@ -29,6 +31,16 @@ const gestureCanvas = document.createElement('canvas')
 
 let gestureInterval = null
 
+// 全屏状态管理
+const isFullscreen = ref(false)
+
+// 新增：手势指令防重复执行控制
+const gestureControl = reactive({
+  lastCommand: '',
+  lastTime: 0,
+  debounceTime: 3000 // 3秒防抖时间
+})
+
 onMounted(() => {
   // 初始视频列表
   videoList.value = ['sample1.mp4', 'sample2.mp4']
@@ -37,6 +49,12 @@ onMounted(() => {
   nextTick(() => {
     if (videoElement.value) {
       videoElement.value.addEventListener('ended', handleEnded)
+      
+      // 监听全屏状态变化
+      document.addEventListener('fullscreenchange', handleFullscreenChange)
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.addEventListener('MSFullscreenChange', handleFullscreenChange)
     }
   })
 })
@@ -44,6 +62,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopGestureRecognition()
   stopCamera()
+  
+  // 移除全屏状态监听
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
 })
 
 function selectVideo(index) {
@@ -129,8 +153,46 @@ function changeRate(val) {
   }
 }
 
-function enterFullscreen() {
-  videoElement.value?.requestFullscreen?.()
+function toggleFullscreen() {
+  if (!videoElement.value) return
+  
+  // 处理浏览器兼容性
+  if (!isFullscreen.value) {
+    // 进入全屏
+    if (videoElement.value.requestFullscreen) {
+      videoElement.value.requestFullscreen()
+    } else if (videoElement.value.webkitRequestFullscreen) { // Chrome, Safari, Edge
+      videoElement.value.webkitRequestFullscreen()
+    } else if (videoElement.value.mozRequestFullScreen) { // Firefox
+      videoElement.value.mozRequestFullScreen()
+    } else if (videoElement.value.msRequestFullscreen) { // IE/Edge
+      videoElement.value.msRequestFullscreen()
+    } else {
+      console.error('浏览器不支持全屏API')
+    }
+  } else {
+    // 退出全屏
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen()
+    } else if (document.mozCancelFullScreen) {
+      document.mozCancelFullScreen()
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen()
+    } else {
+      console.error('浏览器不支持退出全屏')
+    }
+  }
+}
+
+// 处理全屏状态变化
+function handleFullscreenChange() {
+  isFullscreen.value = !!(document.fullscreenElement || 
+                          document.webkitFullscreenElement || 
+                          document.mozFullScreenElement || 
+                          document.msFullscreenElement);
+  console.log(`当前全屏状态: ${isFullscreen.value}`)
 }
 
 function togglePlayMode() {
@@ -207,63 +269,83 @@ function startGestureRecognition() {
     gestureCanvas.height = cameraVideo.value.videoHeight
     ctx.drawImage(cameraVideo.value, 0, 0, gestureCanvas.width, gestureCanvas.height)
 
-    gestureCanvas.toBlob(async (blob) => {
-      if (!blob) return
-      const formData = new FormData()
-      formData.append('image', blob, 'frame.jpg')
-
-      try {
-        const res = await axios.post('/api/gesture/recognize', formData)
-        handleGestureCommand(res.data.command)
-      } catch (err) {
-        console.error('识别失败:', err)
+gestureCanvas.toBlob(async (blob) => {
+  if (!blob) return
+  const formData = new FormData()
+  formData.append('file', blob, 'frame.jpg') 
+  try {
+    const res = await axios.post('http://localhost:5000/api/gesture/predict', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-    }, 'image/jpeg', 0.8)
-  }, 500)
+    })
+    handleGestureCommand(res.data.gesture)
+  } catch (err) {
+    console.error('识别失败:', err)
+  }
+}, 'image/jpeg', 0.8)
+  }, 1500)
 }
 
 function stopGestureRecognition() {
   if (gestureInterval) clearInterval(gestureInterval)
 }
+/*
+stop  暂停/播放
+like 上一个 
+dislike 下一个
+mute 静音和取消静音
+ok  模式切换 
+palm 全屏与取消全屏
+one 手势栏弹出与收回
+*/
 
-// 手势命令处理保持不变
+//手势命令处理
 function handleGestureCommand(cmd) {
-  switch (cmd) {
-    case 'play':
-      if (videoElement.value?.paused) togglePlay()
-      break
-    case 'pause':
-      if (!videoElement.value?.paused) togglePlay()
-      break
-    case 'next':
-      nextVideo()
-      break
-    case 'prev':
-      prevVideo()
-      break
+  const now = new Date().getTime();
+  const { lastCommand, lastTime, debounceTime } = gestureControl;
+  
+  // 检查是否是相同指令且在防抖时间内
+  if (cmd.gesture === lastCommand && now - lastTime < debounceTime) {
+    console.log(`忽略重复指令: ${cmd.gesture} (${(now - lastTime)/1000}s内)`)
+    return;
+  }
+  
+  // 更新最后执行的指令和时间
+  gestureControl.lastCommand = cmd.gesture;
+  gestureControl.lastTime = now;
+  
+  switch (cmd.gesture) {
+    case 'like':
+      prevVideo();
+      console.log('识别到指令: 上一个视频');
+      break;
+    case 'dislike':
+      nextVideo();
+      console.log('识别到指令: 下一个视频');
+      break;
+    case 'stop':
+      togglePlay();
+      console.log('识别到指令: 播放/暂停');
+      break;
     case 'mute':
-      if (!isMuted.value) toggleMute()
-      break
-    case 'unmute':
-      if (isMuted.value) toggleMute()
-      break
-    case 'vol_up':
-      changeVolume(Math.min(100, volume.value + 10))
-      break
-    case 'vol_down':
-      changeVolume(Math.max(0, volume.value - 10))
-      break
-    case 'seek_forward':
-      seekForward(10)
-      break
-    case 'seek_backward':
-      seekBackward(10)
-      break
-    case 'mode':
-      togglePlayMode()
-      break
+      toggleMute();
+      console.log('识别到指令: 静音/取消静音');
+      break;
+    case 'ok':
+      togglePlayMode();
+      console.log('识别到指令: 播放模式切换');
+      break;
+    case 'palm':
+      toggleFullscreen()
+      console.log('识别到指令: 全屏播放');
+      break;
+    case 'one':
+      emit('update:showHelp', !props.showHelp);
+      console.log('识别到指令: 显示/隐藏手势帮助');
+      break;
     default:
-      console.log('未识别指令:', cmd)
+      console.log('未识别指令:', cmd.gesture);
   }
 }
 
@@ -345,6 +427,7 @@ function handleFolderSelect(event) {
         :disableNext="currentIndex === videoList.length - 1"
         :showGestureHelp="showHelp"
         :playMode="playMode"
+        :isFullscreen="isFullscreen"
         @update:showGestureHelp="emit('update:showHelp', $event)"
         @prev="prevVideo"
         @next="nextVideo"
@@ -353,7 +436,7 @@ function handleFolderSelect(event) {
         @volumeChange="changeVolume"
         @brightnessChange="changeBrightness"
         @rateChange="changeRate"
-        @fullscreen="enterFullscreen"
+        @fullscreen="toggleFullscreen"
         @seekForward="seekForward"
         @seekBackward="seekBackward"
         @modeToggle="togglePlayMode"
