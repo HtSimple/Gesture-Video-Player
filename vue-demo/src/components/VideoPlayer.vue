@@ -1,4 +1,3 @@
-vue
 <script setup>
 // 修复：移除重复的 onMounted 导入
 import { ref, onMounted, nextTick, onBeforeUnmount, reactive } from 'vue'
@@ -43,7 +42,7 @@ const gestureControl = reactive({
 
 onMounted(() => {
   // 初始视频列表
-  videoList.value = ['sample1.mp4', 'sample2.mp4']
+  videoList.value = []
   if (videoList.value.length) selectVideo(0)
 
   nextTick(() => {
@@ -68,21 +67,45 @@ onBeforeUnmount(() => {
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
   document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+  
+  // 释放所有创建的Object URL
+  videoList.value.forEach(item => {
+    if (item?.url) {
+      URL.revokeObjectURL(item.url)
+    }
+  })
 })
 
-function selectVideo(index) {
+// 标记为async函数
+async function selectVideo(index) {
   currentIndex.value = index
-  currentVideoSrc.value = `/videos/${videoList.value[index]}`
-
-  nextTick(() => {
-    if (videoElement.value) {
+  const videoItem = videoList.value[index]
+  
+  // 如果还没有为该视频创建Object URL，则创建
+  if (!videoItem.url) {
+    videoItem.url = URL.createObjectURL(videoItem.file)
+  }
+  
+  currentVideoSrc.value = videoItem.url
+  
+  // 等待视频元素加载新的源文件
+  await nextTick()
+  
+  if (videoElement.value) {
+    try {
+      // 设置视频属性
       videoElement.value.volume = volume.value / 100
       videoElement.value.muted = isMuted.value
       videoElement.value.playbackRate = playbackRate.value
-      videoElement.value.play()
+      
+      // 尝试播放视频
+      await videoElement.value.play()
       isPlaying.value = true
+    } catch (error) {
+      console.error('播放失败:', error)
+      alert(`视频播放失败: ${error.message}`)
     }
-  })
+  }
 }
 
 function prevVideo() {
@@ -269,21 +292,21 @@ function startGestureRecognition() {
     gestureCanvas.height = cameraVideo.value.videoHeight
     ctx.drawImage(cameraVideo.value, 0, 0, gestureCanvas.width, gestureCanvas.height)
 
-gestureCanvas.toBlob(async (blob) => {
-  if (!blob) return
-  const formData = new FormData()
-  formData.append('file', blob, 'frame.jpg') 
-  try {
-    const res = await axios.post('http://localhost:5000/api/gesture/predict', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+    gestureCanvas.toBlob(async (blob) => {
+      if (!blob) return
+      const formData = new FormData()
+      formData.append('file', blob, 'frame.jpg') 
+      try {
+        const res = await axios.post('http://localhost:5000/api/gesture/predict', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        })
+        handleGestureCommand(res.data.gesture)
+      } catch (err) {
+        console.error('识别失败:', err)
       }
-    })
-    handleGestureCommand(res.data.gesture)
-  } catch (err) {
-    console.error('识别失败:', err)
-  }
-}, 'image/jpeg', 0.8)
+    }, 'image/jpeg', 0.8)
   }, 1500)
 }
 
@@ -352,26 +375,33 @@ function handleGestureCommand(cmd) {
 // ===== 新增函数 =====
 
 // 处理用户选择文件夹（文件）事件
-function handleFolderSelect(event) {
+async function handleFolderSelect(event) {
   const files = event.target.files
   if (!files.length) return
 
-  // 过滤出所有mp4文件，取文件名
-  const mp4Files = []
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
-    if (file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4')) {
-      mp4Files.push(file.name)
-    }
-  }
+  // 过滤出所有视频文件
+  const videoFiles = Array.from(files).filter(file => 
+    file.type.startsWith('video/') || 
+    /\.(mp4|webm|ogg|mov|mkv)$/i.test(file.name)
+  )
 
-  if (mp4Files.length === 0) {
-    alert('所选文件夹中没有 MP4 文件')
+  if (videoFiles.length === 0) {
+    alert('所选文件夹中没有视频文件')
     return
   }
 
-  videoList.value = mp4Files
-  selectVideo(0)
+  // 创建视频元数据列表
+  videoList.value = videoFiles.map(file => ({
+    name: file.name,
+    file: file,           // 保存File对象
+    url: null,            // 稍后会设置为Object URL
+    type: file.type
+  }))
+  
+  // 选择第一个视频
+  if (videoList.value.length > 0) {
+    await selectVideo(0)
+  }
 }
 
 </script>
@@ -393,7 +423,7 @@ function handleFolderSelect(event) {
             multiple
             style="display: none"
             @change="handleFolderSelect"
-            accept="video/mp4"
+            accept="video/mp4,video/webm,video/ogg"
           />
         </label>
       </h3>
@@ -404,7 +434,7 @@ function handleFolderSelect(event) {
           :class="{ active: idx === currentIndex }"
           @click="selectVideo(idx)"
         >
-          {{ video }}
+          {{ video.name }}
         </li>
       </ul>
     </div>
@@ -415,6 +445,7 @@ function handleFolderSelect(event) {
         :src="currentVideoSrc"
         controls
         :style="{ width: '100%', maxHeight: '600px', filter: `brightness(${brightness}%)` }"
+        @error="console.error('视频加载错误')"
       ></video>
 
       <ControlBar
