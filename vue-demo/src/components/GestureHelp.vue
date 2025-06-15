@@ -11,20 +11,13 @@
 
 <script setup>
 const gestureList = [
-  { id: 1, desc: '播放/暂停', gesture: '拳头' },
-  { id: 2, desc: '切换倍速', gesture: '向上剪刀手' },
-  { id: 3, desc: '音量减', gesture: '加、减、拳头' },
-  { id: 3, desc: '音量加', gesture: '加、减、拳头' },
-  { id: 3, desc: '静音与解除', gesture: '加、减、拳头' },
-  { id: 4, desc: '全屏切换', gesture: '双手展开/并拢' },
-  { id: 5, desc: '上一个视频', gesture: '指左/指右' },
-  { id: 3, desc: '下一个视频', gesture: '加、减、拳头' },
-  { id: 8, desc: '亮度提高', gesture: '上滑/下滑' },
-  { id: 3, desc: '亮度降低', gesture: '加、减、拳头' },
-  { id: 10, desc: '快进', gesture: '合指滑动' },
-  { id: 3, desc: '快退', gesture: '加、减、拳头' },
-  { id: 11, desc: '播放模式切换', gesture: '四指张开' },
-  { id: 12, desc: '手势说明栏', gesture: '三指张开/并拢' }
+  { id: 1, desc: '播放/暂停', gesture: '右手五指合拢，掌心面向镜头' },
+  { id: 2, desc: '静音与解除', gesture: '右手食指竖着放到嘴唇中间' },
+  { id: 3, desc: '全屏切换', gesture: '右手五指张开，掌心面向镜头' },
+  { id: 4, desc: '上一个视频', gesture: '右手竖大拇指，手背向镜头' },
+  { id: 5, desc: '下一个视频', gesture: '右手倒竖大拇指，手心向镜头' },
+  { id: 6, desc: '播放模式切换', gesture: '右手比ok的手势，手心向镜头' },
+  { id: 7, desc: '手势说明栏', gesture: '右手单竖一根右手食指' }
 ]
 </script>
 

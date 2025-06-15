@@ -338,7 +338,7 @@ function handleGestureCommand(cmd) {
       break;
     case 'palm':
       toggleFullscreen()
-      console.log('识别到指令: 全屏播放');
+      console.log('识别到指令: 全屏切换，当前状态',isFullscreen.value);
       break;
     case 'one':
       emit('update:showHelp', !props.showHelp);
